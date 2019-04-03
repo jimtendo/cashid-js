@@ -77,11 +77,26 @@ class CashID {
    * @param {String} path - api endpoint ie "/api/test"
    */
 
-  constructor(domain, path) {
+  constructor(domain, path, opts) {
     this.domain = domain || '';
     this.path = path || '';
 
     this.statusConfirmation;
+    
+    if (typeof opts === 'undefined' || (typeof opts.storeRequest === 'undefined' || typeof opts.retrieveRequest === 'undefined')) {
+      this.requests = {};
+      this.storeRequest = function(nonce, request) {
+        this.requests[nonce] = request;
+      };
+      this.retrieveRequest = function(nonce) {
+        return this.requests[nonce];
+      }
+    }
+    
+    else {
+      this.storeRequest = opts.storeRequest;
+      this.retreiveRequest = opts.retrieveRequest;
+    }
   }
 
   /**
@@ -128,6 +143,12 @@ class CashID {
 
     // Form the request URI from the configured values.
     let requestUri = `cashid:${this.domain}${this.path}?${params}`;
+    
+    this.storeRequest(nonce, {
+      request: requestUri,
+      expires: this.getTime() + (60 * 15),
+      consumed: 0
+    });
 
     // Return the request URI to indicate success.
     return requestUri;
@@ -193,6 +214,10 @@ class CashID {
 
   getRandom(min, max) {
     return Math.floor(Math.random() * (1 + max - min)) + min;
+  }
+  
+  getTime() {
+    return Math.floor(Date.now() / 1000);
   }
 
   /**
@@ -329,13 +354,13 @@ class CashID {
       // }
 
       // Try to load the request from the apcu object cache.
-      let requestReference;
+      let requestReference = this.retrieveRequest(parsedRequest['parameters']['nonce']);
       // let requestReference = apcu_fetch(
       //   "cashid_request_{parsedRequest['parameters']['nonce']}"
       // );
 
       // Validate that the request was issued by this service provider.
-      if (!userInitiatedRequest && requestReference === false) {
+      if (!userInitiatedRequest && typeof requestReference === 'undefined') {
         throw new Error(
           `The request nonce was not issued by this service.", statuscode:${
             statusCodes['requestInvalidNonce']
@@ -360,7 +385,7 @@ class CashID {
       if (
         !userInitiatedRequest &&
         requestReference !== undefined &&
-        requestReference['expires'] < time()
+        requestReference['expires'] < this.getTime()
       ) {
         throw new Error(
           `The request has expired && is no longer available.", statuscode:${
@@ -487,6 +512,7 @@ class CashID {
           message = key;
         }
       });
+      
       this.statusConfirmation.message = message;
 
       // Add the action && data parameters to the response structure.

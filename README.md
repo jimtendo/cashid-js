@@ -54,6 +54,18 @@ The identity manager would read the cashid uri, and send a JSON POST request to 
 
 You would validate the object on the server side and return true as the response if valid.
 
+Note that requests are stored in memory by default. To over-ride the storage mechanism, pass functions into the third argument of the constructor:
+```
+let cashid = new CashID(domain, path, {
+  storeRequest: (nonce, request) => {
+    // E.g. store request in Redis
+  },
+  retrieveRequest = (nonce) => {
+    // E.g. retrieve request from Redis
+  }
+});
+```
+
 ## Available Methods
 
 `cashid.validateRequest(responseObject)`
